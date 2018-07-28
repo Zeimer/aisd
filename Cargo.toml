@@ -1,0 +1,6 @@
+[package]
+name = "aisd"
+version = "0.1.0"
+authors = ["Zeimer <zzaimer@gmail.com>"]
+
+[dependencies]
