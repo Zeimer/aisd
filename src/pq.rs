@@ -1,14 +1,43 @@
+//! Priority queues.
+
 use std::ops::Index;
 use std::f64;
 
-// A binary heap implemented using an array (or rather a vector).
+pub trait PriorityQueue {
+    type Item;
+
+    /// Check whether the queue is empty.
+    fn is_empty(&self) -> bool;
+
+    /// Compute the number of elements in the queue.
+    fn size(&self) -> usize;
+
+    /// Insert a new element into the queue.
+    fn insert(&mut self, item: Self::Item);
+
+    /// Like `insert`, but allows chaining.
+    /// Time: like `insert` (unless reimplemented).
+    fn ins(&mut self, item: Self::Item) -> &mut Self {
+        self.insert(item);
+        self
+    }
+
+    /// Return a reference to the least element in the queue.
+    fn min(&self) -> Option<&Self::Item>;
+
+    /// Remove the minimal element from the queue and return it.
+    fn del_min(&mut self) -> Option<Self::Item>;
+}
+
+// A binary heap implemented implicitly using a Vec.
 #[derive(Debug)]
 pub struct Heap<T: PartialOrd> {
     array: Vec<T>
 }
 
 impl<T: PartialOrd> Heap<T> {
-    /// Create an empty `Heap`.
+    /// Create an empty priority queue.
+    /// Time: O(1)
     pub fn new() -> Heap<T> {
         Heap {array: vec![]}
     }
@@ -17,11 +46,6 @@ impl<T: PartialOrd> Heap<T> {
     /// Time: O(1)
     pub fn arr(&self) -> &Vec<T> {
         &self.array
-    }
-
-    /// Compute the number of elements in the heap.
-    pub fn size(&self) -> usize {
-        self.array.len()
     }
 
     /// Compute the height of the heap. The empty heap has height 0
@@ -63,7 +87,6 @@ impl<T: PartialOrd> Heap<T> {
         true
     }
 
-
     // Make sure that all nodes on the path from i to
     // root satisfy the heap property. Time: O(height of the heap).
     fn fix_heap_property_bottom_up(&mut self, i: usize) {
@@ -78,20 +101,6 @@ impl<T: PartialOrd> Heap<T> {
                 break;
             }
         }
-    }
-
-    /// Insert a new element into the rightmost leaf of the heap.
-    /// Time: O(height of the heap)
-    pub fn insert(&mut self, elem: T) {
-        self.array.push(elem);
-        let l = self.size() - 1; // Doesn't overflow because of previous line.
-        self.fix_heap_property_bottom_up(l);
-    }
-
-    /// Like `insert`, but allows chaining.
-    pub fn ins(&mut self, elem: T) -> &mut Self {
-        self.insert(elem);
-        self
     }
 
     // Make sure that the smallest element is at the root by repeatedly swapping
@@ -126,33 +135,6 @@ impl<T: PartialOrd> Heap<T> {
         }
     }
 
-    /// Remove the least element from the heap and return it.
-    /// Time: O(height of the heap)
-    pub fn del_min(&mut self) -> Option<T> {
-        if self.size() == 0 {
-            None
-        } else {
-            let last_index = self.size() - 1;
-            self.array.swap(0, last_index);
-
-            let result = self.array.pop();
-
-            self.fix_heap_property_top_down(0);
-
-            result
-        }
-    }
-
-    /// Return a reference to the least element in the heap.
-    /// Time: O(1)
-    pub fn min(&self) -> Option<&T> {
-        if self.size() == 0 {
-            None
-        } else {
-            Some(self.array.index(0))
-        }
-    }
-
     /// Create a heap from a vector.
     /// Time: O(size of the heap * height of the heap)
     pub fn make_heap_bottom_up(v: Vec<T>) -> Heap<T> {
@@ -163,35 +145,6 @@ impl<T: PartialOrd> Heap<T> {
         }
 
         h
-    }
-
-    /// Create a heap from a vector.
-    /// Time: O(size of the heap)
-    pub fn wut_make_heap(v: Vec<T>) -> Heap<T> {
-        if v.len() == 0 {
-            Heap::new()
-        } else {
-            let mut h = Heap {array: v};
-            let end = if h.size() % 2 == 0 {h.size() - 2} else {h.size() - 1};
-            
-            for i in (2 .. end).filter(|i| i % 2 == 0).rev() {
-                let min = if h.array[i] < h.array[i - 1] {i} else {i - 1};
-                let parent = (i - 1)/2;
-
-                if h.array[min] < h.array[parent] {
-                    h.fix_heap_property_top_down(parent);
-                }
-            }
-
-            let s = h.size();
-
-            if s % 2 == 0 {
-                h.fix_heap_property_bottom_up(s - 1);
-            }
-
-            h
-
-        }
     }
 
     /// Create a heap from a vector.
@@ -241,11 +194,148 @@ impl<T: PartialOrd> Heap<T> {
     }
 }
 
+impl<T: PartialOrd> PriorityQueue for Heap<T> {
+    type Item = T;
+
+    /// Time: O(1)
+    fn is_empty(&self) -> bool {
+        self.array.is_empty()
+    }
+
+    /// Time: O(1)
+    fn size(&self) -> usize {
+        self.array.len()
+    }
+
+    /// Time: O(height of the heap)
+    fn insert(&mut self, elem: T) {
+        self.array.push(elem);
+        let l = self.size() - 1; // Doesn't overflow because of previous line.
+        self.fix_heap_property_bottom_up(l);
+    }
+    
+    /// Time: O(1)
+    fn min(&self) -> Option<&T> {
+        if self.size() == 0 {
+            None
+        } else {
+            Some(self.array.index(0))
+        }
+    }
+
+    /// Time: O(height of the heap)
+    fn del_min(&mut self) -> Option<T> {
+        if self.size() == 0 {
+            None
+        } else {
+            let last_index = self.size() - 1;
+            self.array.swap(0, last_index);
+
+            let result = self.array.pop();
+
+            self.fix_heap_property_top_down(0);
+
+            result
+        }
+    }
+}
+
 /// A heap is also an iterator (`next` is `del_min`).
 impl<T: PartialOrd> Iterator for Heap<T> {
     type Item = T;
 
     fn next(&mut self) -> Option<T> {
         self.del_min()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pq::Heap;
+    use pq::PriorityQueue;
+
+    fn is_sorted<T: PartialOrd>(v: &Vec<T>) -> bool {
+        if v.len() >= 2 {
+            for i in 0 .. v.len() - 2 {
+                if v[i] > v[i + 1] {return false;}
+            }
+        }
+
+        true
+    }
+
+    #[test]
+    fn size_ok() {
+        let mut h = Heap::new();
+
+        h.insert(42);
+        h.insert(12);
+        h.insert(3);
+
+        assert_eq!(h.size(), 3);
+    }
+
+    #[test]
+    fn new_height() {
+        let h: Heap<u32> = Heap::new();
+        assert_eq!(h.height(), 0);
+    }
+
+    #[test]
+    fn singleton_height() {
+        let h = Heap::make_heap_bottom_up(vec![42]);
+        assert_eq!(h.height(), 1);
+    }
+
+    #[test]
+    fn two_height() {
+        let h = Heap::make_heap_bottom_up(vec![42, 42]);
+        assert_eq!(h.height(), 2);
+    }
+
+    #[test]
+    fn four_height() {
+        let h = Heap::make_heap_bottom_up(vec![42, 42, 42, 42]);
+        assert_eq!(h.height(), 3);
+    }
+
+    #[test]
+    fn new_is_heap() {
+        let h: Heap<u32> = Heap::new();
+        assert!(Heap::is_heap(h.arr()));
+    }
+
+    #[test]
+    fn ins_is_heap() {
+        let mut h = Heap::new();
+        h.ins(6).ins(4).ins(1).ins(7).ins(9).ins(3).ins(1);
+        assert!(Heap::is_heap(h.arr()));
+    }
+
+    #[test]
+    fn make_heap_bottom_up_is_heap() {
+        let v = vec![6, 4, 1, 7, 9, 3, 1];
+        let h = Heap::make_heap_bottom_up(v);
+        assert!(Heap::is_heap(h.arr()));
+    }
+
+    #[test]
+    fn make_heap_top_down_is_heap() {
+        let h = Heap::make_heap_top_down(vec![6, 4, 1, 7, 9, 3, 1]);
+        println!("h = {:?}", h);
+        assert!(Heap::is_heap(h.arr()));
+    }
+
+    #[test]
+    fn sort_is_sorted() {
+        let mut v = vec![6, 4, 1, 7, 9, 3, 1];
+        Heap::sort(&mut v);
+        assert!(is_sorted(&v));
+    }
+
+    #[test]
+    fn sort2_is_sorted() {
+        let v = vec![6, 4, 1, 7, 9, 3, 1];
+        assert!(is_sorted(&Heap::sort2(v)));
     }
 }
