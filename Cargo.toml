@@ -4,3 +4,12 @@ version = "0.1.0"
 authors = ["Zeimer <zzaimer@gmail.com>"]
 
 [dependencies]
+quickcheck = "0.6.2"
+
+[lib]
+name = "aisd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mybin"
+path = "src/bin.rs"

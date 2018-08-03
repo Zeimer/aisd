@@ -3,6 +3,9 @@
 use std::ops::Index;
 use std::f64;
 
+use quickcheck::Arbitrary;
+use quickcheck::Gen;
+
 pub trait PriorityQueue {
     type Item;
 
@@ -62,7 +65,7 @@ impl<T: PartialOrd> Heap<T> {
 
     /// Check if a vector is a valid heap.
     /// Time:O(size of the heap)
-    pub fn is_heap(v: &Vec<T>) -> bool {
+    pub fn is_heap_aux(v: &Vec<T>, cmp: fn(&T, &T) -> bool) -> bool {
         if v.len() > 0 {
             let last = v.len() - 1;
 
@@ -73,11 +76,11 @@ impl<T: PartialOrd> Heap<T> {
                 let r = 2 * i + 2;
 
                 if r <= last {
-                    if v[i] > v[l] || v[i] > v[r] {
+                    if cmp(&v[i], &v[l]) || cmp(&v[i], &v[r]) {
                         return false;
                     }
                 } else if l <= last {
-                    if v[i] > v[l] {
+                    if cmp(&v[i], &v[l]) {
                         return false;
                     }
                 }
@@ -85,6 +88,10 @@ impl<T: PartialOrd> Heap<T> {
         }
 
         true
+    }
+
+    pub fn is_heap(v: &Vec<T>) -> bool {
+        Heap::is_heap_aux(v, PartialOrd::gt)
     }
 
     // Make sure that all nodes on the path from i to
@@ -249,6 +256,33 @@ impl<T: PartialOrd> Iterator for Heap<T> {
     }
 }
 
+impl<T: PartialOrd + Clone> PartialEq for Heap<T> {
+    fn eq(&self, rhs: &Heap<T>) -> bool {
+        Heap::sort2(self.array.clone()) == Heap::sort2(rhs.array.clone())
+    }
+}
+
+impl<T: PartialOrd + Clone> Clone for Heap<T> {
+    fn clone(&self) -> Self {
+        let v = self.array.clone();
+
+        Heap {array: v}
+    }
+}
+
+impl<T: PartialOrd + Arbitrary + Clone> Arbitrary for Heap<T> {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        let v: Vec<T> = Arbitrary::arbitrary(g);
+
+        let mut h = Heap::new();
+        for x in v {
+            h.insert(x);
+        }
+
+        h
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pq::Heap;
@@ -264,78 +298,156 @@ mod tests {
         true
     }
 
-    #[test]
-    fn size_ok() {
-        let mut h = Heap::new();
+    // Interface tests.
+    quickcheck! {
+        fn is_empty_size(h: Heap<u32>) -> bool {
+            h.is_empty() == (h.size() == 0)
+        }
 
-        h.insert(42);
-        h.insert(12);
-        h.insert(3);
+        fn is_empty_insert(h: Heap<u32>, item: u32) -> bool {
+            let mut h2 = h.clone();
+            h2.insert(item);
+            h2.is_empty() == false
+        }
 
-        assert_eq!(h.size(), 3);
+        fn min_is_empty(h: Heap<u32>) -> bool {
+            (h.clone().min() != Option::None) == (h.is_empty() == false)
+        }
+
+        fn del_min_is_empty(h: Heap<u32>) -> bool {
+            (h.clone().del_min() != Option::None) == (h.is_empty() == false)
+        }
+
+        fn size_ins(h: Heap<u32>, i: u32) -> bool {
+            h.size() + 1 == h.clone().ins(i).size()
+        }
+        
+        fn size_min(h: Heap<u32>) -> bool {
+            (h.clone().min() != Option::None) == (h.size() != 0)
+        }
+
+        fn size_del_min(h: Heap<u32>) -> bool {
+            let mut h2 = h.clone();
+            match h2.del_min() {
+                Some(_) => h.size() == h2.size() + 1,
+                None => h.size() == h2.size()
+            }
+        }
+
+        fn insert_del_min(h: Heap<u32>) -> bool {
+            let mut h2 = h.clone();
+            let h3 = h.clone();
+
+            let item = h2.del_min();
+
+            match item {
+                Some(i) => *h2.ins(i) == h3,
+                None => h2 == h3
+            }
+        }
+
+        fn insert_min(h: Heap<u32>) -> bool {
+            let mut h2 = h.clone();
+
+            h2.ins(0).min() == Some(0)
+        }
+
+        fn min_del_min(h: Heap<u32>) -> bool {
+            let mut h2 = h.clone();
+
+            h.min() == h2.del_min()
+        }
+
+        fn del_min_least(h: Heap<u32>) -> bool {
+            let mut h2 = h.clone();
+            let m = match h2.del_min() {
+                Some(m) => m,
+                None => {return true;}
+            };
+
+            for &x in h2.arr() {
+                if x < m {return false;}
+            }
+
+            true
+        }
     }
 
-    #[test]
-    fn new_height() {
-        let h: Heap<u32> = Heap::new();
-        assert_eq!(h.height(), 0);
-    }
+    // Implementation tests.
+    quickcheck! {
+        
+        fn is_empty_new() -> bool {
+            (Heap::new() as Heap<u32>).is_empty() == true
+        }
 
-    #[test]
-    fn singleton_height() {
-        let h = Heap::make_heap_bottom_up(vec![42]);
-        assert_eq!(h.height(), 1);
-    }
+        fn size_new() -> bool {
+            (Heap::new() as Heap<u32>).size() == 0
+        }
 
-    #[test]
-    fn two_height() {
-        let h = Heap::make_heap_bottom_up(vec![42, 42]);
-        assert_eq!(h.height(), 2);
-    }
+        fn height_new() -> bool {
+            (Heap::new() as Heap<u32>).height() == 0
+        }
 
-    #[test]
-    fn four_height() {
-        let h = Heap::make_heap_bottom_up(vec![42, 42, 42, 42]);
-        assert_eq!(h.height(), 3);
-    }
+        fn is_heap_new() -> bool {
+            Heap::is_heap((Heap::new() as Heap<u32>).arr())
+        }
 
-    #[test]
-    fn new_is_heap() {
-        let h: Heap<u32> = Heap::new();
-        assert!(Heap::is_heap(h.arr()));
-    }
+        fn is_empty_make_new_heap_bottom_up(v: Vec<u32>) -> bool {
+            let b = v.is_empty();
+            let h = Heap::make_heap_bottom_up(v);
+            h.is_empty() == b
+        }
 
-    #[test]
-    fn ins_is_heap() {
-        let mut h = Heap::new();
-        h.ins(6).ins(4).ins(1).ins(7).ins(9).ins(3).ins(1);
-        assert!(Heap::is_heap(h.arr()));
-    }
+        fn size_make_new_heap_bottom_up(v: Vec<u32>) -> bool {
+            let len = v.len();
+            let h = Heap::make_heap_bottom_up(v);
+            h.size() == len
+        }
 
-    #[test]
-    fn make_heap_bottom_up_is_heap() {
-        let v = vec![6, 4, 1, 7, 9, 3, 1];
-        let h = Heap::make_heap_bottom_up(v);
-        assert!(Heap::is_heap(h.arr()));
-    }
+        fn is_heap_make_new_heap_bottom_up(v: Vec<u32>) -> bool {
+            let h = Heap::make_heap_bottom_up(v);
+            Heap::is_heap(h.arr())
+        }
 
-    #[test]
-    fn make_heap_top_down_is_heap() {
-        let h = Heap::make_heap_top_down(vec![6, 4, 1, 7, 9, 3, 1]);
-        println!("h = {:?}", h);
-        assert!(Heap::is_heap(h.arr()));
-    }
+        fn is_empty_make_new_heap_top_down(v: Vec<u32>) -> bool {
+            let b = v.is_empty();
+            let h = Heap::make_heap_top_down(v);
+            h.is_empty() == b
+        }
+        fn size_make_new_heap_top_down(v: Vec<u32>) -> bool {
+            let len = v.len();
+            let h = Heap::make_heap_top_down(v);
+            h.size() == len
+        }
 
-    #[test]
-    fn sort_is_sorted() {
-        let mut v = vec![6, 4, 1, 7, 9, 3, 1];
-        Heap::sort(&mut v);
-        assert!(is_sorted(&v));
-    }
+        fn is_heap_make_new_heap_top_down(v: Vec<u32>) -> bool {
+            let h = Heap::make_heap_top_down(v);
+            Heap::is_heap(h.arr())
+        }
 
-    #[test]
-    fn sort2_is_sorted() {
-        let v = vec![6, 4, 1, 7, 9, 3, 1];
-        assert!(is_sorted(&Heap::sort2(v)));
+        fn is_heap_arbitrary(h: Heap<u32>) -> bool {
+            Heap::is_heap(h.arr())
+        }
+
+        fn is_heap_ins(h: Heap<u32>, i: u32) -> bool {
+            Heap::is_heap(h.clone().ins(i).arr())
+        }
+
+        fn is_heap_del_min(h: Heap<u32>) -> bool {
+            let mut h2 = h.clone();
+            h2.del_min();
+            Heap::is_heap(h2.arr())
+        }
+
+        fn sort_is_sorted(v: Vec<u32>) -> bool {
+            let mut v = v.clone();
+            Heap::sort(&mut v);
+            is_sorted(&v)
+        }
+
+        fn sort2_is_sorted(v: Vec<u32>) -> bool {
+            let v = Heap::sort2(v);
+            is_sorted(&v)
+        }
     }
 }
