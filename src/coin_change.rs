@@ -96,7 +96,7 @@ pub fn make_change_count(coins: &HashSet<usize>, amount: usize) -> Option<usize>
     dp.push(Some(0));
 
     for i in 1 .. (amount + 2) {
-        println!("{:?}", dp);
+        //println!("{:?}", dp);
         if coins.contains(&i) {
             dp.push(Some(1));
             continue;
